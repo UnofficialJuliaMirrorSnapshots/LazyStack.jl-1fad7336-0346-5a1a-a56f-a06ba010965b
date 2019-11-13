@@ -2,6 +2,16 @@ module LazyStack
 
 export stack
 
+#===== Overloads =====#
+
+ndims(A) = Base.ndims(A)
+ndims(::Tuple) = 1
+ndims(::NamedTuple) = 1
+
+size(A) = Base.size(A)
+size(t::Tuple) = tuple(length(t))
+size(t::NamedTuple) = tuple(length(t))
+
 #===== Slices =====#
 
 """
@@ -88,18 +98,12 @@ Base.collect(x::Stacked{T,2,<:AbstractArray{<:AbstractArray{T,1}}}) where {T} = 
 
 Base.view(x::Stacked{T,2,<:AbstractArray{<:AbstractArray{T,1}}}, ::Colon, i::Int) where {T} = x.slices[i]
 
-#===== ndims & iterators =====#
-
-ndims(A) = Base.ndims(A)
-
-ndims(::Tuple) = 1
+#===== Iteration =====#
 
 ITERS = [:Flatten, :Drop, :Filter]
 for iter in ITERS
     @eval ndims(::Iterators.$iter) = 1
 end
-
-#===== Iteration =====#
 
 """
     stack(::Generator)
@@ -136,9 +140,14 @@ for iter in ITERS
 end
 stack(arr::AbstractArray{Any}) = stack_iter(arr) # e.g. from arr=[]; push!(arr, rand(3)); ...
 
-stack(tup::AbstractArray...) = stack_iter(tup)
 stack(arr::AbstractArray{<:AbstractArray}) = stack_iter(arr)
-stack(tup::Tuple{Vararg{AbstractArray}}) = stack_iter(tup)
+stack(arr::AbstractArray{<:Tuple}) = stack_iter(arr)
+stack(arr::AbstractArray{<:NamedTuple}) = stack_iter(arr)
+
+stack(tup::AbstractArray...) = stack_iter(tup)
+stack(tup::Tuple...) = stack_iter(tup)
+stack(tup::NamedTuple...) = stack_iter(tup)
+# stack(tup::Tuple{Vararg{AbstractArray}}) = stack_iter(tup)
 
 function stack_iter(itr)
     if itr isa Tuple || itr isa Base.Generator{<:Tuple} || ndims(itr) == 1
@@ -196,7 +205,7 @@ function stack_rest(v, i, n, s, itr, state)
     end
 end
 
-#===== offset =====#
+#===== Offset =====#
 
 using OffsetArrays
 
@@ -243,6 +252,19 @@ end
 maybe_add_names(A, a) = A
 maybe_add_names(A, a::NamedDimsArray{L}) where {L} =
     NamedDimsArray(A, (L..., ntuple(_ -> :_, ndims(A) - ndims(a))...))
+
+"""
+    stack(name, things...)
+
+If you give one `name::Symbol` before the pieces to be stacked,
+this will be the name of the last dimension of the resulting `NamedDimsArray`.
+(Names attached to slices, and to containers, should also be preserved.)
+"""
+function LazyStack.stack(s::Symbol, args...)
+    data = stack(args...)
+    name_last = ntuple(d -> d==ndims(data) ? s : :_, ndims(data))
+    NamedDimsArray(data, name_last)
+end
 
 #===== Zygote =====#
 

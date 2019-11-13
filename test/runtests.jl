@@ -15,6 +15,18 @@ using OffsetArrays, NamedDims, Zygote
     @test stack(v34[i] for i in 1:4) isa Array
 
 end
+@testset "tuples" begin
+
+    vt = [(1,2), (3,4), (5,6)]
+    vnt = [(a=1,b=2), (a=3,b=4), (a=5,b=6)]
+    @test stack(vt) isa Array
+    @test stack(vt) == reshape(1:6, 2,3)
+    @test stack(vnt) isa Array
+
+    @test stack(vt...) isa Array
+    @test stack(vnt...) isa Array
+
+end
 @testset "generators" begin
 
     g234 = (ones(2) .* (10i + j) for i in 1:3, j in 1:4)
@@ -29,6 +41,9 @@ end
 
     g29 = (fill(i,2) for i=1:9)
     @test stack(Iterators.reverse(g29)) == reverse(stack(g29), dims=2)
+
+    gt = ((1,2,3) for i in 1:4)
+    @test stack(gt) isa Array
 
 end
 @testset "types" begin
@@ -58,15 +73,22 @@ end
 
     nin = [NamedDimsArray(ones(3), :a) for i in 1:4]
     @test NamedDims.names(stack(nin)) == (:a, :_)
+    @test NamedDims.names(stack(:b, nin)) == (:a, :b)
 
     nout = NamedDimsArray([ones(3) for i in 1:4], :b)
     @test NamedDims.names(stack(nout)) == (:_, :b)
+    @test NamedDims.names(stack(:b, nout)) == (:_, :b)
+    @test_throws Exception stack(:c, nout)
 
     nboth = NamedDimsArray([NamedDimsArray(ones(3), :a) for i in 1:4], :b)
     @test NamedDims.names(stack(nboth)) == (:a, :b)
 
     ngen = (NamedDimsArray(ones(3), :a) for i in 1:4)
-    NamedDims.names(stack(ngen)) == (:a, :_)
+    @test NamedDims.names(stack(ngen)) == (:a, :_)
+    @test NamedDims.names(stack(:b, ngen)) == (:a, :b)
+
+    nmat = [NamedDimsArray(ones(3), :a) for i in 1:3, j in 1:4]
+    @test NamedDims.names(stack(:c, nmat)) == (:a, :_, :c)
 
 end
 @testset "offset" begin
